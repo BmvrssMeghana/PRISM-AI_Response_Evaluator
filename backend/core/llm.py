@@ -25,22 +25,36 @@ async def call_llm(
     temperature: float = 0.1,
 ) -> Dict[str, Any]:
     """
-    Unified entry point to call the active LLM provider.
-    Automatically detects available keys and targets the appropriate API.
-    Returns parsed JSON dictionary. Enforces JSON output parsing.
+    Unified entry point to call LLM providers.
+    Uses sequential fallback: tries Gemini first (if key configured),
+    then OpenAI, then Anthropic. If one fails, falls back to the next.
     """
-    # 1. Determine provider based on key presence
+    providers = []
     if settings.GEMINI_API_KEY:
-        return await _call_gemini(system_prompt, user_prompt, max_tokens, temperature)
-    elif settings.OPENAI_API_KEY:
-        return await _call_openai(system_prompt, user_prompt, max_tokens, temperature)
-    elif settings.ANTHROPIC_API_KEY:
-        return await _call_anthropic(system_prompt, user_prompt, max_tokens, temperature)
-    else:
+        providers.append(("gemini", _call_gemini))
+    if settings.OPENAI_API_KEY:
+        providers.append(("openai", _call_openai))
+    if settings.ANTHROPIC_API_KEY:
+        providers.append(("anthropic", _call_anthropic))
+
+    if not providers:
         raise LLMError(
             "No LLM API keys configured. Please set GEMINI_API_KEY, "
             "OPENAI_API_KEY, or ANTHROPIC_API_KEY in your .env file."
         )
+
+    errors = []
+    for name, call_func in providers:
+        try:
+            return await call_func(system_prompt, user_prompt, max_tokens, temperature)
+        except Exception as e:
+            err_msg = f"LLM Provider {name} failed: {e}"
+            logger.warning(err_msg)
+            errors.append(err_msg)
+
+    raise LLMError(
+        f"All configured LLM providers failed. Details:\n" + "\n".join(errors)
+    )
 
 
 def _extract_json(text: str) -> Dict[str, Any]:
