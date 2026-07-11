@@ -109,9 +109,9 @@ async def submit_evaluation(
         status=SubmissionStatus.pending,
     )
     db.add(submission)
-    await db.flush()
+    await db.commit()
 
-    logger.info(f"Submission created: {submission.id}")
+    logger.info(f"Submission created and committed: {submission.id}")
 
     # Launch evaluation in background
     background_tasks.add_task(run_evaluation, submission.id)
