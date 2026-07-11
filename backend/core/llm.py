@@ -14,8 +14,8 @@ from core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Concurrency semaphore to avoid rate-limiting issues on free tiers
-_sem = asyncio.Semaphore(1)
+# Concurrency semaphore to avoid rate-limiting issues on free tiers. Initialized lazily inside the event loop.
+_sem: Optional[asyncio.Semaphore] = None
 
 class LLMError(Exception):
     pass
@@ -32,6 +32,10 @@ async def call_llm(
     Tries Gemini first (if key configured), then OpenAI, then Anthropic.
     Ensures safe concurrency and retry logic to avoid rate limits (429).
     """
+    global _sem
+    if _sem is None:
+        _sem = asyncio.Semaphore(1)
+
     providers = []
     if settings.GEMINI_API_KEY:
         providers.append(("gemini", _call_gemini))
