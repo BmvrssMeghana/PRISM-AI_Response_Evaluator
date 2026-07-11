@@ -48,6 +48,23 @@ async def lifespan(app: FastAPI):
     logger.info(f"Launching background ingestion for: {sources}")
     asyncio.create_task(run_ingestion_async(sources))
 
+    # 3. Recover and evaluate any pending submissions left over from previous starts
+    from core.database import AsyncSessionFactory, Submission, SubmissionStatus
+    from sqlalchemy import select
+    from services.orchestrator import run_evaluation
+    try:
+        async with AsyncSessionFactory() as session:
+            result = await session.execute(
+                select(Submission).where(Submission.status == SubmissionStatus.pending)
+            )
+            pending_subs = result.scalars().all()
+            if pending_subs:
+                logger.info(f"Found {len(pending_subs)} pending submissions on startup. Launching recovery evaluations...")
+                for sub in pending_subs:
+                    asyncio.create_task(run_evaluation(sub.id))
+    except Exception as e:
+        logger.error(f"Failed to recover pending submissions: {e}")
+
     yield
 
     logger.info(f"PRISM shutting down ...")

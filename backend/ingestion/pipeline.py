@@ -21,9 +21,9 @@ logger = logging.getLogger(__name__)
 
 
 def _make_chunk_id(text: str, meta: dict) -> str:
-    """Stable ID for a chunk so upsert is safe to re-run."""
-    key = f"{meta.get('dataset','?')}|{meta.get('chunk_index',0)}|{text[:80]}"
-    return hashlib.md5(key.encode()).hexdigest()
+    """Stable ID for a chunk based on its full content and dataset source."""
+    text_hash = hashlib.md5(text.encode("utf-8", errors="replace")).hexdigest()
+    return f"{meta.get('dataset', 'unknown')}_{text_hash}"
 
 
 def run_ingestion(sources: List[str] | None = None) -> None:
@@ -78,11 +78,28 @@ def run_ingestion(sources: List[str] | None = None) -> None:
     for m in metas:
         sanitised_metas.append({k: str(v) for k, v in m.items()})
 
+    # Deduplicate before sending to ChromaDB to prevent DuplicateIDError
+    seen_ids = set()
+    unique_ids = []
+    unique_embeddings = []
+    unique_texts = []
+    unique_metas = []
+
+    for idx, chunk_id in enumerate(ids):
+        if chunk_id not in seen_ids:
+            seen_ids.add(chunk_id)
+            unique_ids.append(chunk_id)
+            unique_embeddings.append(embeddings[idx])
+            unique_texts.append(texts[idx])
+            unique_metas.append(sanitised_metas[idx])
+
+    logger.info(f"Deduplicated: {len(ids)} chunks -> {len(unique_ids)} unique chunks to upsert.")
+
     add_documents(
-        ids=ids,
-        embeddings=embeddings,
-        documents=texts,
-        metadatas=sanitised_metas,
+        ids=unique_ids,
+        embeddings=unique_embeddings,
+        documents=unique_texts,
+        metadatas=unique_metas,
     )
 
     final_count = count_documents()

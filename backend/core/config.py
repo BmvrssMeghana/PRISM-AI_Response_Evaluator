@@ -6,6 +6,9 @@ from pydantic_settings import BaseSettings
 from functools import lru_cache
 
 
+import os
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 class Settings(BaseSettings):
     # ── Application ─────────────────────────────────────────────────
     APP_NAME: str = "PRISM"
@@ -16,7 +19,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://postgres:root@localhost:5432/prism_db"
 
     # ── Vector Store (ChromaDB) ──────────────────────────────────────
-    CHROMA_PERSIST_DIR: str = "./chroma_data"
+    CHROMA_PERSIST_DIR: str = os.path.join(BASE_DIR, "chroma_data")
     CHROMA_COLLECTION: str = "prism_kb"
 
     # ── Embeddings ───────────────────────────────────────────────────

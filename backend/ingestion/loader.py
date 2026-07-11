@@ -41,17 +41,19 @@ def _load_truthfulqa() -> List[Tuple[str, Dict[str, Any]]]:
 
 def _load_squad() -> List[Tuple[str, Dict[str, Any]]]:
     """
-    Load SQuAD v1.1 (train split).
-    We ingest the context passages (deduplicated) — not the questions.
+    Load SQuAD v1.1 (validation split).
+    We ingest the context passages (deduplicated) — limited to 1,000 unique contexts for speed.
     """
     from datasets import load_dataset
 
-    logger.info("Loading SQuAD ...")
-    ds = load_dataset("rajpurkar/squad", split="train")
+    logger.info("Loading SQuAD (validation split, capped) ...")
+    ds = load_dataset("rajpurkar/squad", split="validation")
 
     seen_contexts: set = set()
     records: List[Tuple[str, Dict[str, Any]]] = []
     for row in ds:
+        if len(records) >= 1000:
+            break
         context = row.get("context", "").strip()
         title = row.get("title", "unknown")
         if context and context not in seen_contexts:
