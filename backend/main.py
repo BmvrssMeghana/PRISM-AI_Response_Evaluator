@@ -59,9 +59,16 @@ async def lifespan(app: FastAPI):
             )
             pending_subs = result.scalars().all()
             if pending_subs:
-                logger.info(f"Found {len(pending_subs)} pending submissions on startup. Launching recovery evaluations...")
-                for sub in pending_subs:
-                    asyncio.create_task(run_evaluation(sub.id))
+                logger.info(f"Found {len(pending_subs)} pending submissions on startup. Launching sequential recovery worker...")
+                async def run_recovery():
+                    for sub in pending_subs:
+                        try:
+                            await run_evaluation(sub.id)
+                            # Sleep to respect Gemini's 15 RPM / 20 RPM free tier limits
+                            await asyncio.sleep(10.0)
+                        except Exception as e:
+                            logger.error(f"Recovery evaluation failed for {sub.id}: {e}")
+                asyncio.create_task(run_recovery())
     except Exception as e:
         logger.error(f"Failed to recover pending submissions: {e}")
 
