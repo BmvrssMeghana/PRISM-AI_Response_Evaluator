@@ -7,11 +7,15 @@ import json
 import logging
 import re
 import httpx
+import asyncio
 from typing import Dict, Any, Optional
 
 from core.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Concurrency semaphore to avoid rate-limiting issues on free tiers
+_sem = asyncio.Semaphore(1)
 
 
 class LLMError(Exception):
@@ -25,9 +29,9 @@ async def call_llm(
     temperature: float = 0.1,
 ) -> Dict[str, Any]:
     """
-    Unified entry point to call LLM providers.
-    Uses sequential fallback: tries Gemini first (if key configured),
-    then OpenAI, then Anthropic. If one fails, falls back to the next.
+    Unified entry point to call LLM providers with automatic sequential fallback.
+    Tries Gemini first (if key configured), then OpenAI, then Anthropic.
+    Ensures safe concurrency and retry logic to avoid rate limits (429).
     """
     providers = []
     if settings.GEMINI_API_KEY:
@@ -44,13 +48,15 @@ async def call_llm(
         )
 
     errors = []
-    for name, call_func in providers:
-        try:
-            return await call_func(system_prompt, user_prompt, max_tokens, temperature)
-        except Exception as e:
-            err_msg = f"LLM Provider {name} failed: {e}"
-            logger.warning(err_msg)
-            errors.append(err_msg)
+    # Run requests through the global semaphore to limit concurrent requests
+    async with _sem:
+        for name, call_func in providers:
+            try:
+                return await call_func(system_prompt, user_prompt, max_tokens, temperature)
+            except Exception as e:
+                err_msg = f"LLM Provider {name} failed: {e}"
+                logger.warning(err_msg)
+                errors.append(err_msg)
 
     raise LLMError(
         f"All configured LLM providers failed. Details:\n" + "\n".join(errors)
@@ -85,6 +91,33 @@ def _extract_json(text: str) -> Dict[str, Any]:
         }
 
 
+async def _post_with_retry(
+    client: httpx.AsyncClient,
+    url: str,
+    payload: Dict[str, Any],
+    headers: Optional[Dict[str, str]] = None,
+    retries: int = 3,
+    delay: float = 8.0,
+) -> httpx.Response:
+    """Helper to execute POST requests with retries on rate limits (429)."""
+    resp = None
+    for attempt in range(retries):
+        try:
+            resp = await client.post(url, json=payload, headers=headers)
+            if resp.status_code == 429:
+                sleep_time = delay * (attempt + 1)
+                logger.warning(f"API rate limit hit (429). Retrying in {sleep_time}s... (Attempt {attempt+1}/{retries})")
+                await asyncio.sleep(sleep_time)
+                continue
+            return resp
+        except httpx.RequestError as e:
+            if attempt == retries - 1:
+                raise
+            logger.warning(f"Request error: {e}. Retrying in {delay}s...")
+            await asyncio.sleep(delay)
+    return resp
+
+
 # ── Provider: Gemini ──────────────────────────────────────────────────
 async def _call_gemini(
     system_prompt: str,
@@ -111,18 +144,13 @@ async def _call_gemini(
     }
 
     async with httpx.AsyncClient(timeout=45.0) as client:
-        try:
-            resp = await client.post(url, json=payload)
-            if resp.status_code != 200:
-                raise LLMError(f"Gemini API returned status {resp.status_code}: {resp.text}")
+        resp = await _post_with_retry(client, url, payload, delay=8.0)
+        if resp.status_code != 200:
+            raise LLMError(f"Gemini API returned status {resp.status_code}: {resp.text}")
 
-            data = resp.json()
-            text = data["candidates"][0]["content"]["parts"][0]["text"]
-            return _extract_json(text)
-        except Exception as e:
-            if isinstance(e, LLMError):
-                raise
-            raise LLMError(f"Gemini API call failed: {e}") from e
+        data = resp.json()
+        text = data["candidates"][0]["content"]["parts"][0]["text"]
+        return _extract_json(text)
 
 
 # ── Provider: OpenAI ──────────────────────────────────────────────────
@@ -151,18 +179,13 @@ async def _call_openai(
     }
 
     async with httpx.AsyncClient(timeout=45.0) as client:
-        try:
-            resp = await client.post(url, json=payload, headers=headers)
-            if resp.status_code != 200:
-                raise LLMError(f"OpenAI API returned status {resp.status_code}: {resp.text}")
+        resp = await _post_with_retry(client, url, payload, headers=headers, delay=3.0)
+        if resp.status_code != 200:
+            raise LLMError(f"OpenAI API returned status {resp.status_code}: {resp.text}")
 
-            data = resp.json()
-            text = data["choices"][0]["message"]["content"]
-            return _extract_json(text)
-        except Exception as e:
-            if isinstance(e, LLMError):
-                raise
-            raise LLMError(f"OpenAI API call failed: {e}") from e
+        data = resp.json()
+        text = data["choices"][0]["message"]["content"]
+        return _extract_json(text)
 
 
 # ── Provider: Anthropic ───────────────────────────────────────────────
@@ -191,15 +214,10 @@ async def _call_anthropic(
     }
 
     async with httpx.AsyncClient(timeout=45.0) as client:
-        try:
-            resp = await client.post(url, json=payload, headers=headers)
-            if resp.status_code != 200:
-                raise LLMError(f"Anthropic API returned status {resp.status_code}: {resp.text}")
+        resp = await _post_with_retry(client, url, payload, headers=headers, delay=4.0)
+        if resp.status_code != 200:
+            raise LLMError(f"Anthropic API returned status {resp.status_code}: {resp.text}")
 
-            data = resp.json()
-            text = data["content"][0]["text"]
-            return _extract_json(text)
-        except Exception as e:
-            if isinstance(e, LLMError):
-                raise
-            raise LLMError(f"Anthropic API call failed: {e}") from e
+        data = resp.json()
+        text = data["content"][0]["text"]
+        return _extract_json(text)
