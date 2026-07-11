@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 # Concurrency semaphore to avoid rate-limiting issues on free tiers
 _sem = asyncio.Semaphore(1)
 
-
 class LLMError(Exception):
     pass
 
@@ -64,21 +63,42 @@ async def call_llm(
 
 
 def _extract_json(text: str) -> Dict[str, Any]:
-    """Helper to find and parse JSON block from raw model output."""
+    """Helper to find and parse JSON block from raw model output using balanced brace counting."""
     text_clean = text.strip()
-    # Try finding markdown code block e.g. ```json ... ```
-    match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text_clean, re.DOTALL)
-    if match:
-        candidate = match.group(1)
-    else:
-        # Try raw braces search
-        match_raw = re.search(r"(\{.*\})", text_clean, re.DOTALL)
-        candidate = match_raw.group(1) if match_raw else text_clean
+    
+    # First, find the first '{'
+    start_idx = text_clean.find('{')
+    if start_idx == -1:
+        # No JSON object found
+        return {
+            "score": 0.0,
+            "justification": f"No JSON object found in response. Raw output: {text[:200]}...",
+            "vetoed": False,
+            "reason": "Missing JSON",
+            "claims": [],
+            "unsupported_claims": [],
+            "verifications": []
+        }
+
+    candidate = ""
+    count = 0
+    for i in range(start_idx, len(text_clean)):
+        char = text_clean[i]
+        if char == '{':
+            count += 1
+        elif char == '}':
+            count -= 1
+            if count == 0:
+                candidate = text_clean[start_idx:i+1]
+                break
+    
+    if not candidate:
+        candidate = text_clean[start_idx:]
 
     try:
         return json.loads(candidate)
     except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse JSON from text: {text_clean}. Error: {e}")
+        logger.error(f"Failed to parse JSON from candidate: {candidate}. Error: {e}")
         # Fallback to dictionary containing error to avoid crashing orchestrator
         return {
             "score": 0.0,
