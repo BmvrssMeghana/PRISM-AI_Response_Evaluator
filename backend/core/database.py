@@ -4,7 +4,7 @@ Async SQLAlchemy engine + session factory + table definitions.
 """
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, Text, DateTime, Enum as SAEnum
+from sqlalchemy import String, Text, DateTime, JSON, Enum as SAEnum
 from datetime import datetime, timezone
 import uuid
 import enum
@@ -39,6 +39,7 @@ class Submission(Base):
     status: Mapped[SubmissionStatus] = mapped_column(
         SAEnum(SubmissionStatus), default=SubmissionStatus.pending
     )
+    evaluation_results: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

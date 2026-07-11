@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { ToastProvider } from './components/Toast.jsx'
 import KBStats from './components/KBStats.jsx'
 import SubmissionForm from './components/SubmissionForm.jsx'
-import RetrievalPreview from './components/RetrievalPreview.jsx'
+import EvaluationResult from './components/EvaluationResult.jsx'
 
 /* ── Recent Submission Row ── */
 function SubmissionRow({ item, onClick }) {
@@ -56,6 +56,19 @@ export default function App() {
     if (activeTab === 'history') fetchSubmissions()
   }
 
+  const handleHistoryRowClick = (item) => {
+    setLastSubmission(item)
+    setLastQuestion(item.question)
+    setActiveTab('submit')
+  }
+
+  const handleStatusChange = (newStatus) => {
+    if (lastSubmission && lastSubmission.status !== newStatus) {
+      setLastSubmission(prev => prev ? { ...prev, status: newStatus } : null)
+      if (activeTab === 'history') fetchSubmissions()
+    }
+  }
+
   return (
     <ToastProvider>
       <div className="page-wrapper">
@@ -102,13 +115,13 @@ export default function App() {
               <>
                 {/* Page Header */}
                 <div className="section-header animate-in" style={{ marginBottom: '2.5rem' }}>
-                  <div className="section-label">Milestone 1 — Evaluation Input Module</div>
+                  <div className="section-label">Milestone 2 — Multi-Agent Judging Pipeline</div>
                   <h1 className="section-title" style={{ fontSize: 'clamp(1.6rem, 4vw, 2.25rem)' }}>
-                    Submit an AI Response
+                    AI Response Quality Audit
                   </h1>
                   <p className="section-desc">
-                    Provide a question and the AI-generated answer you want to evaluate.
-                    An optional reference answer or document grounds the evidence-based scoring.
+                    Submit questions and responses below. PRISM judge agents will run parallel evaluations
+                    on relevance, factual accuracy, hallucination, and confidence calibration.
                   </p>
                 </div>
 
@@ -121,11 +134,11 @@ export default function App() {
                         <div className="success-panel" style={{ marginBottom: '1.75rem' }}>
                           <span className="success-icon">✓</span>
                           <div>
-                            <div className="success-title">Submission saved — status: pending</div>
+                            <div className="success-title">Submission: {lastSubmission.status}</div>
                             <div className="success-id">ID: {lastSubmission.id}</div>
-                            {lastSubmission.has_document && (
+                            {lastSubmission.document_filename && (
                               <div style={{ fontSize: '0.75rem', color: 'var(--gray-400)', marginTop: '0.2rem' }}>
-                                Document: {lastSubmission.document_filename} ({lastSubmission.document_chars.toLocaleString()} chars extracted)
+                                Document: {lastSubmission.document_filename}
                               </div>
                             )}
                           </div>
@@ -136,21 +149,24 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Right — Retrieval Preview */}
+                  {/* Right — Evaluation Report */}
                   <div className="animate-in animate-in-delay-2">
-                    {lastQuestion ? (
+                    {lastSubmission ? (
                       <div className="card">
-                        <RetrievalPreview question={lastQuestion} submissionId={lastSubmission?.id} />
+                        <EvaluationResult
+                          submissionId={lastSubmission.id}
+                          onStatusChange={handleStatusChange}
+                        />
                       </div>
                     ) : (
                       <div className="card card-flat" style={{ padding: '2.5rem 2rem', textAlign: 'center' }}>
                         <div style={{ fontSize: '2.5rem', marginBottom: '1rem', opacity: 0.35 }}>🔍</div>
                         <h3 style={{ fontWeight: 700, marginBottom: '0.5rem', color: 'var(--gray-700)' }}>
-                          Retrieval Preview
+                          Evaluation Report
                         </h3>
                         <p style={{ fontSize: '0.875rem', color: 'var(--gray-400)' }}>
-                          After you submit a question, the top-5 most relevant reference chunks
-                          will appear here with similarity scores.
+                          After submission, the detailed dimensional score breakdown and factual claim audits
+                          will appear here in real time.
                         </p>
                       </div>
                     )}
@@ -165,8 +181,8 @@ export default function App() {
                     {[
                       { num: '01', title: 'Submit', desc: 'Paste any AI-generated answer with its original question.' },
                       { num: '02', title: 'Retrieve', desc: 'PRISM searches TruthfulQA + SQuAD for the most relevant reference passages.' },
-                      { num: '03', title: 'Judge', desc: 'Six specialized agents score relevance, accuracy, hallucination, completeness, and confidence.' },
-                      { num: '04', title: 'Verdict', desc: 'A weighted audit report grades the answer Pass / Caution / Fail with full evidence trail.' },
+                      { num: '03', title: 'Judge', desc: 'Five specialized agents score relevance, accuracy, hallucination, and confidence.' },
+                      { num: '04', title: 'Verdict', desc: 'A detailed audit report is produced with full claim-level verification trails.' },
                     ].map(step => (
                       <div key={step.num} className="card card-flat card-sm">
                         <div style={{ fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.15em', color: 'var(--gray-400)', marginBottom: '0.5rem' }}>
@@ -216,7 +232,7 @@ export default function App() {
                 {submissions.length > 0 && (
                   <div className="submissions-list">
                     {submissions.map(item => (
-                      <SubmissionRow key={item.id} item={item} onClick={() => {}} />
+                      <SubmissionRow key={item.id} item={item} onClick={handleHistoryRowClick} />
                     ))}
                   </div>
                 )}
@@ -231,7 +247,7 @@ export default function App() {
           <div className="container">
             <div className="footer-inner">
               <span className="footer-text">
-                PRISM — AI Response Evaluator · Milestone 1
+                PRISM — AI Response Evaluator · Milestone 2
               </span>
               <span className="footer-text" style={{ fontFamily: 'monospace', fontSize: '0.72rem' }}>
                 FastAPI · ChromaDB · all-MiniLM-L6-v2 · PostgreSQL

@@ -9,12 +9,13 @@ import logging
 from typing import Optional, List
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, BackgroundTasks
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
 from core.database import get_db, Submission, SubmissionStatus
+from services.orchestrator import run_evaluation
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["submissions"])
@@ -56,6 +57,7 @@ async def submit_evaluation(
     ai_response: str = Form(..., description="The AI-generated answer to evaluate"),
     reference_answer: Optional[str] = Form(None, description="Optional reference/ground-truth answer"),
     file: Optional[UploadFile] = File(None, description="Optional PDF or TXT reference document"),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: AsyncSession = Depends(get_db),
 ):
     # ── Validate lengths ────────────────────────────────────────────
@@ -110,6 +112,9 @@ async def submit_evaluation(
     await db.flush()
 
     logger.info(f"Submission created: {submission.id}")
+
+    # Launch evaluation in background
+    background_tasks.add_task(run_evaluation, submission.id)
 
     return {
         "id": submission.id,
@@ -180,5 +185,6 @@ async def get_submission(
         "document_filename": submission.document_filename,
         "document_text_preview": (submission.document_text or "")[:500],
         "status": submission.status,
+        "evaluation_results": submission.evaluation_results,
         "created_at": submission.created_at.isoformat(),
     }

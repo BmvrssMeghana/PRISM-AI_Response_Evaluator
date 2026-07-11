@@ -35,6 +35,15 @@ class Settings(BaseSettings):
     # Min docs in ChromaDB before skipping re-ingestion
     INGEST_MIN_DOCS: int = 1000
 
+    # ── LLM Configuration ────────────────────────────────────────────
+    GEMINI_API_KEY: str | None = None
+    OPENAI_API_KEY: str | None = None
+    ANTHROPIC_API_KEY: str | None = None
+
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+    OPENAI_MODEL: str = "gpt-4o-mini"
+    ANTHROPIC_MODEL: str = "claude-3-5-haiku-20241022"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
