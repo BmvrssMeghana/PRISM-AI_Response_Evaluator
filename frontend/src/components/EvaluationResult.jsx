@@ -162,22 +162,26 @@ export default function EvaluationResult({ submissionId, onStatusChange }) {
       </div>
 
       {/* ── RETRIEVED REFERENCE CHUNKS ── */}
-      {report.retrieved_passages && report.retrieved_passages.length > 0 && (
-        <div style={{ marginBottom: '2.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h3 style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.01em', margin: 0 }}>
-              Retrieved Reference Evidence ({report.retrieved_passages.length} Chunks)
-            </h3>
-            <span style={{ fontSize: '0.75rem', color: 'var(--gray-500)', fontWeight: 600 }}>ChromaDB Semantic Search</span>
-          </div>
+      <div style={{ marginBottom: '2.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <h3 style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.01em', margin: 0 }}>
+            Retrieved Reference Evidence
+            {report.retrieved_passages && report.retrieved_passages.length > 0
+              ? ` (${report.retrieved_passages.length} Chunks)`
+              : ''}
+          </h3>
+          <span style={{ fontSize: '0.75rem', color: 'var(--gray-500)', fontWeight: 600 }}>ChromaDB Semantic Search</span>
+        </div>
+
+        {report.retrieved_passages && report.retrieved_passages.length > 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
             {report.retrieved_passages.map((chunk, idx) => (
-              <div 
-                key={idx} 
-                style={{ 
-                  border: '1px solid var(--gray-200)', 
-                  borderRadius: 'var(--radius)', 
-                  padding: '1rem 1.1rem', 
+              <div
+                key={idx}
+                style={{
+                  border: '1px solid var(--gray-200)',
+                  borderRadius: 'var(--radius)',
+                  padding: '1rem 1.1rem',
                   background: '#ffffff',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
                 }}
@@ -201,8 +205,30 @@ export default function EvaluationResult({ submissionId, onStatusChange }) {
               </div>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <div style={{
+            border: '1px dashed var(--gray-300)',
+            borderRadius: 'var(--radius)',
+            padding: '1.25rem 1.5rem',
+            background: 'var(--gray-50)',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '0.75rem'
+          }}>
+            <span style={{ fontSize: '1.2rem', flexShrink: 0 }}>📭</span>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.3rem' }}>
+                No Relevant Passages Found in Reference KB
+              </div>
+              <p style={{ fontSize: '0.8rem', color: 'var(--gray-600)', margin: 0, lineHeight: '1.6' }}>
+                No chunks in ChromaDB scored above the <strong>65% cosine similarity threshold</strong> for this question.
+                This is a <strong>KB coverage gap</strong> — not a hallucination. Agents evaluated claims using
+                general world knowledge instead.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* ── CLAIMS VERIFICATION DETAIL ── */}
       {report.accuracy?.verifications && report.accuracy.verifications.length > 0 && (
