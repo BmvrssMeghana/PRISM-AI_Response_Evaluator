@@ -31,6 +31,7 @@ export default function App() {
   const [submissions, setSubmissions] = useState([])
   const [subLoading, setSubLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('submit') // 'submit' | 'history'
+  const [selectedHistoryId, setSelectedHistoryId] = useState(null)
 
   const fetchSubmissions = useCallback(async () => {
     setSubLoading(true)
@@ -57,9 +58,7 @@ export default function App() {
   }
 
   const handleHistoryRowClick = (item) => {
-    setLastSubmission(item)
-    setLastQuestion(item.question)
-    setActiveTab('submit')
+    setSelectedHistoryId(item.id)
   }
 
   const handleStatusChange = (newStatus) => {
@@ -199,7 +198,7 @@ export default function App() {
 
             {activeTab === 'history' && (
               <div className="animate-in">
-                <div className="section-header" style={{ marginBottom: '2rem' }}>
+                <div className="section-header" style={{ marginBottom: '1.5rem' }}>
                   <div className="section-label">Submission History</div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
                     <h2 className="section-title" style={{ marginBottom: 0 }}>Recent Evaluations</h2>
@@ -230,10 +229,60 @@ export default function App() {
                 )}
 
                 {submissions.length > 0 && (
-                  <div className="submissions-list">
-                    {submissions.map(item => (
-                      <SubmissionRow key={item.id} item={item} onClick={handleHistoryRowClick} />
-                    ))}
+                  <div className="two-col" style={{ alignItems: 'flex-start' }}>
+                    {/* Left — submission list */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+                      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                        {submissions.map(item => (
+                          <div
+                            key={item.id}
+                            onClick={() => handleHistoryRowClick(item)}
+                            tabIndex={0}
+                            role="button"
+                            onKeyDown={e => e.key === 'Enter' && handleHistoryRowClick(item)}
+                            style={{
+                              padding: '0.85rem 1.1rem',
+                              borderBottom: '1px solid var(--gray-200)',
+                              cursor: 'pointer',
+                              background: selectedHistoryId === item.id ? 'var(--gray-100)' : '#fff',
+                              borderLeft: selectedHistoryId === item.id ? '3px solid var(--black)' : '3px solid transparent',
+                              transition: 'background 0.15s',
+                            }}
+                          >
+                            <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--black)', marginBottom: '0.3rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {item.question}
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                              {item.has_reference && <span className="badge badge-light" style={{ fontSize: '0.6rem' }}>REF</span>}
+                              {item.has_document && <span className="badge badge-light" style={{ fontSize: '0.6rem' }}>DOC</span>}
+                              <span className="badge badge-dark" style={{ fontSize: '0.6rem' }}>{item.status}</span>
+                              <span style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>
+                                {new Date(item.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Right — detail panel */}
+                    <div>
+                      {selectedHistoryId ? (
+                        <div className="card">
+                          <EvaluationResult
+                            submissionId={selectedHistoryId}
+                            onStatusChange={() => {}}
+                          />
+                        </div>
+                      ) : (
+                        <div className="card card-flat" style={{ padding: '3rem 2rem', textAlign: 'center' }}>
+                          <div style={{ fontSize: '2rem', opacity: 0.25, marginBottom: '0.75rem' }}>👈</div>
+                          <p style={{ fontSize: '0.875rem', color: 'var(--gray-500)' }}>
+                            Select an evaluation from the list to view its full audit report.
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
