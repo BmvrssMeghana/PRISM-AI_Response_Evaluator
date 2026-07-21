@@ -27,7 +27,7 @@ def _agent_prompt(role_and_task: str) -> str:
     return f"{BASE_SYSTEM}\n\n{role_and_task}"
 
 
-# ── 1. CLAIM EXTRACTOR ────────────────────────────────────────────────
+# ── 1. CLAIM EXTRACTOR ───────────────────────────────────────────────
 CLAIM_EXTRACTOR_SYSTEM = _agent_prompt("""Role: Claim Extractor.
 Task: split the AI response into atomic, self-contained factual claims — one checkable assertion per claim.
 - Resolve every pronoun/reference to its explicit noun.
@@ -62,18 +62,20 @@ async def evaluate_relevance(question: str, ai_response: str) -> Dict[str, Any]:
 
 
 # ── 3. ACCURACY AGENT ─────────────────────────────────────────────────
-# Scope note (keeps this agent distinct from Hallucination): Accuracy asks
-# "is this claim TRUE", using the evidence as the arbiter of truth. It does
-# not care whether the claim happens to also be absent from evidence in a
-# way that matters for grounding — that question belongs to Hallucination.
 ACCURACY_SYSTEM = _agent_prompt("""Role: Accuracy Validator.
 Task: judge whether each claim is TRUE, using the evidence (and reference answer, if given) as ground truth.
-Label each claim:
+If EVIDENCE is provided:
 - "supported": evidence confirms it.
 - "contradicted": evidence explicitly disagrees with it.
 - "unverifiable": evidence neither confirms nor denies it.
-For each claim give "evidence": the exact confirming/contradicting snippet, or "No matching context in reference materials" if unverifiable.
-Scoring: score = 10 × (supported / total claims); subtract further for any contradiction (contradictions are worse than unverifiable claims).
+
+CRITICAL KB-GAP RULE: If EVIDENCE states that no matching context was found in the Reference Knowledge Base for this question:
+- Evaluate claim correctness against standard factual world knowledge.
+- Mark standard, factually correct claims as "supported", citing "Verified via general world knowledge (KB missing topic coverage)".
+- Mark false/incorrect claims as "contradicted".
+- Do NOT assign a 0/10 score when claims are standard true facts simply because the local KB lacks coverage for the topic.
+
+Scoring: score = 10 × (supported / total claims); subtract heavily for any contradiction.
 Schema: {"score": <float 0-10>, "justification": "<1-2 sentences>", "verifications": [{"claim": "...", "status": "supported|contradicted|unverifiable", "evidence": "..."}]}""")
 
 async def evaluate_accuracy(
@@ -81,10 +83,14 @@ async def evaluate_accuracy(
     retrieved_chunks: List[Dict[str, Any]],
     reference_answer: Optional[str] = None
 ) -> Dict[str, Any]:
-    evidence_text = "\n".join(
-        f"[{idx+1}][{c.get('dataset','unknown')}] {c['text']}"
-        for idx, c in enumerate(retrieved_chunks)
-    )
+    if retrieved_chunks:
+        evidence_text = "\n".join(
+            f"[{idx+1}][{c.get('dataset','unknown')}] {c['text']}"
+            for idx, c in enumerate(retrieved_chunks)
+        )
+    else:
+        evidence_text = "[No matching passages found in Reference Knowledge Base for this question]"
+
     ref_text = f"\nREFERENCE ANSWER:\n{reference_answer}" if reference_answer else ""
 
     user_prompt = (
@@ -103,23 +109,25 @@ async def evaluate_accuracy(
 
 
 # ── 4. HALLUCINATION AGENT ────────────────────────────────────────────
-# Scope note: Hallucination asks "is this claim WRITTEN in the retrieved
-# passages" — pure grounding, never truth. A claim that is true in the
-# real world but missing from the passages is still ungrounded here. This
-# agent must never reason about real-world correctness; that's Accuracy's job.
 HALLUCINATION_SYSTEM = _agent_prompt("""Role: Hallucination Auditor.
-Task: check grounding ONLY — is each claim explicitly present in the retrieved passages? Real-world truth is irrelevant; do not judge correctness.
-- Grounded: the passages state this claim (paraphrase or verbatim).
-- Ungrounded: the passages are silent on it, regardless of whether it's true.
-List every ungrounded claim in "unsupported_claims".
-Scoring: score = 10 × (grounded claims / total claims).
+Task: check grounding and factual fabrication — determine if claims are grounded in passages or represent false hallucinations.
+
+CRITICAL KB-GAP RULE: If PASSAGES states that no matching context was found in the Reference Knowledge Base:
+- An absence of local KB passages on a topic is a KB coverage gap, NOT an AI hallucination!
+- If the response contains standard, factually accurate claims, set score = 10.0 and unsupported_claims = [], with justification: "Reference KB has no passages on this topic; claims are factually standard with zero hallucinated fabrications."
+- Only flag a claim as unsupported/hallucinated if it is an invented or false fabrication.
+
+Scoring: score = 10 × (non-fabricated claims / total claims).
 Schema: {"score": <float 0-10>, "justification": "<1 sentence>", "unsupported_claims": ["..."]}""")
 
 async def evaluate_hallucination(
     claims: List[str],
     retrieved_chunks: List[Dict[str, Any]]
 ) -> Dict[str, Any]:
-    evidence_text = "\n".join(f"[{idx+1}] {c['text']}" for idx, c in enumerate(retrieved_chunks))
+    if retrieved_chunks:
+        evidence_text = "\n".join(f"[{idx+1}] {c['text']}" for idx, c in enumerate(retrieved_chunks))
+    else:
+        evidence_text = "[No matching passages found in Reference Knowledge Base for this question]"
 
     user_prompt = (
         f"CLAIMS:\n{json.dumps(claims)}\n\n"
