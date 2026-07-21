@@ -241,7 +241,7 @@ export default function EvaluationResult({ submissionId, onStatusChange }) {
             <div>
               <div style={{ fontWeight: 700, fontSize: '0.84rem', marginBottom: '0.25rem' }}>No Relevant Passages Found in Reference KB</div>
               <p style={{ fontSize: '0.79rem', color: 'var(--gray-600)', margin: 0, lineHeight: '1.55' }}>
-                No chunks scored above the <strong>65% cosine similarity threshold</strong> for this question.
+                No chunks scored above the <strong>50% cosine similarity threshold</strong> for this question.
                 This is a <strong>KB coverage gap</strong> — agents evaluated using general world knowledge instead.
               </p>
             </div>

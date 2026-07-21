@@ -12,7 +12,7 @@ from ingestion.embedder import embed_query
 logger = logging.getLogger(__name__)
 
 # Minimum cosine similarity threshold (1.0 - dist) for a passage to be considered relevant evidence.
-MIN_SIMILARITY_THRESHOLD = 0.65
+MIN_SIMILARITY_THRESHOLD = 0.5
 
 
 def retrieve(question: str, k: int = 5, min_threshold: float = MIN_SIMILARITY_THRESHOLD) -> List[Dict[str, Any]]:
