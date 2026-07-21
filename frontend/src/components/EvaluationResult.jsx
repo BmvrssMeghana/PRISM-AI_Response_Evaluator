@@ -161,8 +161,51 @@ export default function EvaluationResult({ submissionId, onStatusChange }) {
         </div>
       </div>
 
+      {/* ── RETRIEVED REFERENCE CHUNKS ── */}
+      {report.retrieved_passages && report.retrieved_passages.length > 0 && (
+        <div style={{ marginBottom: '2.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h3 style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.01em', margin: 0 }}>
+              Retrieved Reference Evidence ({report.retrieved_passages.length} Chunks)
+            </h3>
+            <span style={{ fontSize: '0.75rem', color: 'var(--gray-500)', fontWeight: 600 }}>ChromaDB Semantic Search</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+            {report.retrieved_passages.map((chunk, idx) => (
+              <div 
+                key={idx} 
+                style={{ 
+                  border: '1px solid var(--gray-200)', 
+                  borderRadius: 'var(--radius)', 
+                  padding: '1rem 1.1rem', 
+                  background: '#ffffff',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span className="badge badge-dark" style={{ fontSize: '0.65rem', textTransform: 'uppercase' }}>
+                      Chunk #{idx + 1}
+                    </span>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--gray-700)' }}>
+                      Source: {chunk.source || chunk.dataset || 'Reference KB'}
+                    </span>
+                  </div>
+                  <span className="badge badge-outline" style={{ fontSize: '0.72rem', fontWeight: 700 }}>
+                    Match Score: {typeof chunk.score === 'number' ? (chunk.score * 100).toFixed(1) + '%' : chunk.score}
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.82rem', color: 'var(--gray-800)', lineHeight: '1.6', margin: 0, fontFamily: 'monospace', whiteSpace: 'pre-wrap', background: 'var(--gray-50)', padding: '0.75rem', borderRadius: '6px', borderLeft: '3px solid var(--black)' }}>
+                  {chunk.text}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── CLAIMS VERIFICATION DETAIL ── */}
-      {report.accuracy.verifications && report.accuracy.verifications.length > 0 && (
+      {report.accuracy?.verifications && report.accuracy.verifications.length > 0 && (
         <div style={{ marginBottom: '2.5rem' }}>
           <h3 style={{ fontWeight: 800, fontSize: '1.1rem', marginBottom: '1rem', letterSpacing: '-0.01em' }}>Factual Claim Verification</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>

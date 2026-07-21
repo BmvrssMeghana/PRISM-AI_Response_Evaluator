@@ -21,7 +21,6 @@ from services.agents import (
 
 logger = logging.getLogger(__name__)
 
-
 async def run_evaluation(submission_id: str) -> None:
     """
     Load submission from database, retrieve reference material, run the agents,

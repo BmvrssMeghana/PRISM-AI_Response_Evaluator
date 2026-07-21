@@ -8,7 +8,6 @@ import asyncio
 import asyncpg
 import sys
 
-
 async def create_database():
     # Connect to the default 'postgres' database first
     conn = await asyncpg.connect(
